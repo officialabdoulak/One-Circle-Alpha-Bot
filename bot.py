@@ -3,7 +3,6 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 
-
 TOKEN = os.getenv("BOT_TOKEN")
 
 def load_subscribers():
@@ -118,7 +117,25 @@ async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         "/commands\n"
         "Full list of commands with explanations."
-    )
+
+        async def eth(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    price = get_crypto_price("ethereum")
+    await update.message.reply_text(f"ETH Price: ${price}")
+    ) 
+
+    import requests
+
+    def get_crypto_price(coin_id):
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
+
+    response = requests.get(url)
+    data = response.json()
+
+    return data[coin_id]["usd"]
+
+async def btc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    price = get_crypto_price("bitcoin")
+    await update.message.reply_text(f"BTC Price: ${price}")
 
 
 app = Application.builder().token(TOKEN).build()
@@ -130,6 +147,8 @@ app.add_handler(CommandHandler("links", links))
 app.add_handler(CommandHandler("myid", myid))
 app.add_handler(CommandHandler("commands", commands))
 app.add_handler(CommandHandler("broadcast", broadcast))
+app.add_handler(CommandHandler("btc", btc))
+app.add_handler(CommandHandler("eth", eth))
 
 print("One Circle Alpha Bot is running...")
 
