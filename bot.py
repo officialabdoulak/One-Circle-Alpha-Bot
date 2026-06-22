@@ -1,3 +1,4 @@
+import requests
 import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -117,15 +118,15 @@ async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         "/commands\n"
         "Full list of commands with explanations."
-
-        async def eth(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    )
+async def btc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    price = get_crypto_price("bitcoin")
+    await update.message.reply_text(f"BTC Price: ${price}")
+async def eth(update: Update, context: ContextTypes.DEFAULT_TYPE):
     price = get_crypto_price("ethereum")
     await update.message.reply_text(f"ETH Price: ${price}")
-    ) 
 
-    import requests
-
-    def get_crypto_price(coin_id):
+def get_crypto_price(coin_id):
     url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
 
     response = requests.get(url)
