@@ -1,10 +1,13 @@
-import requests
 import os
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-
+import requests
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 
 TOKEN = os.getenv("BOT_TOKEN")
+
+OWNER_ID = 7351567120
+SUBSCRIBERS_FILE = "subscribers.txt"
+
 
 def load_subscribers():
     try:
@@ -21,21 +24,40 @@ def save_subscriber(user_id):
         with open(SUBSCRIBERS_FILE, "a") as file:
             file.write(str(user_id) + "\n")
 
-OWNER_ID = 7351567120
-SUBSCRIBERS_FILE = "subscribers.txt"
+
+def get_crypto_price(coin_id):
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
+    response = requests.get(url)
+    data = response.json()
+    return data[coin_id]["usd"]
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_subscriber(update.effective_user.id)
 
+    keyboard = [
+        [
+            InlineKeyboardButton("BTC Price", callback_data="btc"),
+            InlineKeyboardButton("ETH Price", callback_data="eth")
+        ],
+        [
+            InlineKeyboardButton("Commands", callback_data="commands"),
+            InlineKeyboardButton("Links", callback_data="links")
+        ]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
         "WELCOME TO ONE CIRCLE ALPHA\n\n"
-        "Your private hub for updates, alpha, and opportunities.\n\n"
-        "Type /commands to view all available commands.\n\n"
+        "Your private hub for updates, alpha, prices, and opportunities.\n\n"
+        "Use the buttons below or type /commands.\n\n"
         "Stay focused.\n"
         "Stay early.\n"
-        "Stay ahead."
+        "Stay ahead.",
+        reply_markup=reply_markup
     )
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -44,8 +66,69 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/about - About One Circle Alpha\n"
         "/links - Important community links\n"
         "/myid - Show your Telegram ID\n"
-        "/commands - Full list of commands with explanations"
+        "/commands - Full list of commands\n"
+        "/btc - Check BTC price\n"
+        "/eth - Check ETH price\n"
+        "/users - Admin only\n"
+        "/broadcast - Admin only"
     )
+
+
+async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "ONE CIRCLE ALPHA\n\n"
+        "One Circle Alpha is your private hub for updates, alpha, and opportunities.\n\n"
+        "Stay focused.\n"
+        "Stay early.\n"
+        "Stay ahead."
+    )
+
+
+async def links(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "IMPORTANT LINKS\n\n"
+        "X: Coming Soon\n"
+        "Telegram: Coming Soon\n"
+        "Website: Coming Soon"
+    )
+
+
+async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    await update.message.reply_text(f"Your Telegram ID:\n\n{user_id}")
+
+
+async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "ONE CIRCLE ALPHA COMMANDS\n\n"
+        "/start\nWelcome message.\n\n"
+        "/help\nList all commands.\n\n"
+        "/about\nAbout One Circle Alpha.\n\n"
+        "/links\nImportant community links.\n\n"
+        "/myid\nShow your Telegram ID.\n\n"
+        "/btc\nCheck BTC price.\n\n"
+        "/eth\nCheck ETH price.\n\n"
+        "/commands\nFull list of commands with explanations."
+    )
+
+
+async def btc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    price = get_crypto_price("bitcoin")
+    await update.message.reply_text(f"BTC Price: ${price}")
+
+
+async def eth(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    price = get_crypto_price("ethereum")
+    await update.message.reply_text(f"ETH Price: ${price}")
+
+
+async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        return
+
+    subscribers = load_subscribers()
+    await update.message.reply_text(f"Total subscribers: {len(subscribers)}")
+
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
@@ -70,73 +153,34 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Broadcast sent to {sent} users.")
 
 
-async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        " ONE CIRCLE ALPHA\n\n"
-        "One Circle Alpha is your private hub for updates, alpha, and opportunities.\n\n"
-        "Stay focused.\n"
-        "Stay early.\n"
-        "Stay ahead."
-    )
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
+    if query.data == "btc":
+        price = get_crypto_price("bitcoin")
+        await query.message.reply_text(f"BTC Price: ${price}")
 
-async def links(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🔗 IMPORTANT LINKS\n\n"
-        "🐦 X: https: Coming Soon\n"
-        "💬 Telegram: Coming Soon\n"
-        "🌐 Website: Coming Soon"
-    )
+    elif query.data == "eth":
+        price = get_crypto_price("ethereum")
+        await query.message.reply_text(f"ETH Price: ${price}")
 
+    elif query.data == "commands":
+        await query.message.reply_text(
+            "/start - Welcome message\n"
+            "/btc - Check BTC price\n"
+            "/eth - Check ETH price\n"
+            "/links - Important links\n"
+            "/commands - Full command list"
+        )
 
-async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    await update.message.reply_text(
-        f"🆔 Your Telegram ID:\n\n{user_id}"
-    )
-
-
-async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "ONE CIRCLE ALPHA COMMANDS\n\n"
-
-        "/start\n"
-        "Welcome message.\n\n"
-
-        "/help\n"
-        "List all commands.\n\n"
-
-        "/about\n"
-        "About One Circle Alpha.\n\n"
-
-        "/links\n"
-        "Important community links.\n\n"
-
-        "/myid\n"
-        "Show your Telegram ID.\n\n"
-
-        "/commands\n"
-        "Full list of commands with explanations."
-    )
-async def btc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    price = get_crypto_price("bitcoin")
-    await update.message.reply_text(f"BTC Price: ${price}")
-async def eth(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    price = get_crypto_price("ethereum")
-    await update.message.reply_text(f"ETH Price: ${price}")
-
-def get_crypto_price(coin_id):
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
-
-    response = requests.get(url)
-    data = response.json()
-
-    return data[coin_id]["usd"]
-
-async def btc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    price = get_crypto_price("bitcoin")
-    await update.message.reply_text(f"BTC Price: ${price}")
+    elif query.data == "links":
+        await query.message.reply_text(
+            "IMPORTANT LINKS\n\n"
+            "X: Coming Soon\n"
+            "Telegram: Coming Soon\n"
+            "Website: Coming Soon"
+        )
 
 
 app = Application.builder().token(TOKEN).build()
@@ -147,10 +191,11 @@ app.add_handler(CommandHandler("about", about))
 app.add_handler(CommandHandler("links", links))
 app.add_handler(CommandHandler("myid", myid))
 app.add_handler(CommandHandler("commands", commands))
-app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CommandHandler("btc", btc))
 app.add_handler(CommandHandler("eth", eth))
+app.add_handler(CommandHandler("users", users))
+app.add_handler(CommandHandler("broadcast", broadcast))
+app.add_handler(CallbackQueryHandler(button_handler))
 
 print("One Circle Alpha Bot is running...")
-
 app.run_polling()
