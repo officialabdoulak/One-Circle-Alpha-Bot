@@ -1,5 +1,6 @@
 import os
 import requests
+import feedparser
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 
@@ -7,6 +8,8 @@ TOKEN = os.getenv("BOT_TOKEN")
 
 OWNER_ID = 7351567120
 SUBSCRIBERS_FILE = "subscribers.txt"
+LAST_POST_FILE = "last_post_id.txt"
+X_USERNAME = "officialabdulak"
 
 
 def load_subscribers():
@@ -27,9 +30,22 @@ def save_subscriber(user_id):
 
 def get_crypto_price(coin_id):
     url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
-    response = requests.get(url)
+    response = requests.get(url, timeout=10)
     data = response.json()
     return data[coin_id]["usd"]
+
+
+def get_last_post_id():
+    try:
+        with open(LAST_POST_FILE, "r") as file:
+            return file.read().strip()
+    except FileNotFoundError:
+        return ""
+
+
+def save_last_post_id(post_id):
+    with open(LAST_POST_FILE, "w") as file:
+        file.write(post_id)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -38,12 +54,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
             InlineKeyboardButton("BTC Price", callback_data="btc"),
-            InlineKeyboardButton("ETH Price", callback_data="eth")
+            InlineKeyboardButton("ETH Price", callback_data="eth"),
         ],
         [
             InlineKeyboardButton("Commands", callback_data="commands"),
-            InlineKeyboardButton("Links", callback_data="links")
-        ]
+            InlineKeyboardButton("Links", callback_data="links"),
+        ],
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -55,7 +71,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Stay focused.\n"
         "Stay early.\n"
         "Stay ahead.",
-        reply_markup=reply_markup
+        reply_markup=reply_markup,
     )
 
 
@@ -70,7 +86,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/btc - Check BTC price\n"
         "/eth - Check ETH price\n"
         "/users - Admin only\n"
-        "/broadcast - Admin only"
+        "/broadcast - Admin only\n"
+        "/checkx - Admin only, manually check latest X post"
     )
 
 
@@ -87,7 +104,7 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "IMPORTANT LINKS\n\n"
-        "X: Coming Soon\n"
+        "X: https://x.com/officialabdulak\n"
         "Telegram: Coming Soon\n"
         "Website: Coming Soon"
     )
@@ -101,7 +118,7 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "ONE CIRCLE ALPHA COMMANDS\n\n"
-        "/start\nWelcome message.\n\n"
+        "/start\nWelcome message with buttons.\n\n"
         "/help\nList all commands.\n\n"
         "/about\nAbout One Circle Alpha.\n\n"
         "/links\nImportant community links.\n\n"
@@ -147,10 +164,59 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(chat_id=int(user_id), text=message)
             sent += 1
-        except:
+        except Exception:
             pass
 
     await update.message.reply_text(f"Broadcast sent to {sent} users.")
+
+
+async def send_latest_x_post(context: ContextTypes.DEFAULT_TYPE):
+    feed_url = f"https://nitter.net/{X_USERNAME}/rss"
+
+    try:
+        feed = feedparser.parse(feed_url)
+
+        if not feed.entries:
+            print("No X feed entries found.")
+            return
+
+        latest_post = feed.entries[0]
+        post_id = latest_post.id
+        title = latest_post.title
+        link = latest_post.link
+
+        last_post_id = get_last_post_id()
+
+        if post_id == last_post_id:
+            return
+
+        message = (
+            f"New Post from @{X_USERNAME}\n\n"
+            f"{title}\n\n"
+            f"{link}"
+        )
+
+        subscribers = load_subscribers()
+
+        for user_id in subscribers:
+            try:
+                await context.bot.send_message(chat_id=int(user_id), text=message)
+            except Exception:
+                pass
+
+        save_last_post_id(post_id)
+        print("New X post sent:", post_id)
+
+    except Exception as e:
+        print("X monitor error:", e)
+
+
+async def checkx(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        return
+
+    await send_latest_x_post(context)
+    await update.message.reply_text("X check completed.")
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -177,7 +243,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "links":
         await query.message.reply_text(
             "IMPORTANT LINKS\n\n"
-            "X: Coming Soon\n"
+            "X: https://x.com/officialabdulak\n"
             "Telegram: Coming Soon\n"
             "Website: Coming Soon"
         )
@@ -195,7 +261,10 @@ app.add_handler(CommandHandler("btc", btc))
 app.add_handler(CommandHandler("eth", eth))
 app.add_handler(CommandHandler("users", users))
 app.add_handler(CommandHandler("broadcast", broadcast))
+app.add_handler(CommandHandler("checkx", checkx))
 app.add_handler(CallbackQueryHandler(button_handler))
+
+app.job_queue.run_repeating(send_latest_x_post, interval=30, first=10)
 
 print("One Circle Alpha Bot is running...")
 app.run_polling()
